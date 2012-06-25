@@ -1,0 +1,3 @@
+[submodule "packages/models"]
+	path = packages/models
+	url = git@github.com:tmeasday/meteor-models.git
