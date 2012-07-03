@@ -720,6 +720,23 @@ Tinytest.add("liveui - chunks", function(test) {
   // up with a LiveRange.
   Meteor.flush();
   test.equal(Q.numListeners(), 0);
+
+  // nesting
+
+  var stuff = ReactiveVar(true);
+  var div = OnscreenDiv(Meteor.ui.render(function() {
+    return Meteor.ui.chunk(function() {
+      return "x"+(stuff.get() ? 'y' : '') + Meteor.ui.chunk(function() {
+        return "hi";
+      });
+    });
+  }));
+  test.equal(div.html(), "xyhi");
+  stuff.set(false);
+  Meteor.flush();
+  test.equal(div.html(), "xhi");
+  div.kill();
+  Meteor.flush();
 });
 
 Tinytest.add("liveui - repeated chunk", function(test) {
@@ -1477,6 +1494,27 @@ Tinytest.add("liveui - event handling", function(test) {
   div.kill();
   Meteor.flush();
 
+  // clicking on a div in a nested chunk (without patching)
+  event_buf.length = 0;
+  R = ReactiveVar('foo');
+  div = OnscreenDiv(Meteor.ui.render(function() {
+    return R.get() + Meteor.ui.chunk(function() {
+      return '<span>ism</span>';
+    }, {events: eventmap("click"), event_data:event_buf});
+  }));
+  test.equal(div.text(), 'fooism');
+  clickElement(div.node().getElementsByTagName('SPAN')[0]);
+  test.equal(event_buf, ['click']);
+  event_buf.length = 0;
+  R.set('bar');
+  Meteor.flush();
+  test.equal(div.text(), 'barism');
+  clickElement(div.node().getElementsByTagName('SPAN')[0]);
+  test.equal(event_buf, ['click']);
+  event_buf.length = 0;
+  div.kill();
+  Meteor.flush();
+
 });
 
 Tinytest.add("liveui - cleanup", function(test) {
@@ -1727,7 +1765,7 @@ testAsyncMulti(
           var iframeDiv = OnscreenDiv(
             Meteor.ui.render(function() {
               return '<iframe name="'+frameName+'" '+
-                'src="'+IFRAME_URL_1+'">';
+                'src="'+IFRAME_URL_1+'"></iframe>';
             }));
           var iframe = iframeDiv.node().firstChild;
 

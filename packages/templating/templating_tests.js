@@ -21,6 +21,7 @@ Tinytest.add("templating - assembly", function (test) {
   Meteor.flush();
   test.equal(canonicalizeHtml(onscreen.innerHTML), "xhi");
   document.body.removeChild(onscreen);
+  Meteor.flush();
 });
 
 // Test that if a template throws an error, then pending_partials is
@@ -70,6 +71,7 @@ Tinytest.add("templating - table assembly", function(test) {
 
 
   document.body.removeChild(onscreen);
+  Meteor.flush();
 });
 
 Tinytest.add("templating - event handler this", function(test) {
@@ -148,8 +150,9 @@ Tinytest.add("templating - helpers and dots", function(test) {
       },
       currentCountry: function() {
         return {name: 'Iceland',
+                _pop: 321007,
                 population: function() {
-                  return 321007;
+                  return this._pop;
                 },
                 unicorns: 0, // falsy value
                 daisyGetter: function() {
@@ -204,8 +207,13 @@ Tinytest.add("templating - helpers and dots", function(test) {
   test.equal(Template.test_helpers_d(dataObj).match(/\S+/g), [
     // helpers should get current data context in `this`
     'daisygetter=petal',
-    // object methods should get current data context in `this`
-    'thisTest=leaf'
+    // object methods should get object in `this`
+    'thisTest=leaf',
+    // nesting inside {{#with fancy}} shouldn't affect
+    // method
+    '../thisTest=leaf',
+    // combine .. and .
+    '../fancy.currentFruit=guava'
   ]);
 
   test.equal(Template.test_helpers_e(dataObj).match(/\S+/g), [
@@ -214,10 +222,7 @@ Tinytest.add("templating - helpers and dots", function(test) {
     'fancy.currentFruit=guava',
     'fancy.currentCountry.name=Iceland',
     'fancy.currentCountry.population=321007',
-    'fancy.currentCountry.unicorns=0',
-    // all functions receive the current data context in `this`,
-    // for consistency
-    'fancy.currentCountry.daisyGetter=petal'
+    'fancy.currentCountry.unicorns=0'
   ]);
 
   test.equal(Template.test_helpers_f(dataObj).match(/\S+/g), [
@@ -226,9 +231,14 @@ Tinytest.add("templating - helpers and dots", function(test) {
     'fancyhelper.currentFruit=guava',
     'fancyhelper.currentCountry.name=Iceland',
     'fancyhelper.currentCountry.population=321007',
-    'fancyhelper.currentCountry.unicorns=0',
-    // all functions receive the current data context in `this`,
-    // for consistency
-    'fancyhelper.currentCountry.daisyGetter=petal'
+    'fancyhelper.currentCountry.unicorns=0'
   ]);
+
+  // test significance of 'this', which prevents helper from
+  // shadowing property
+  test.equal(Template.test_helpers_g(dataObj).match(/\S+/g), [
+    'platypus=eggs',
+    'this.platypus=weird'
+  ]);
+
 });
