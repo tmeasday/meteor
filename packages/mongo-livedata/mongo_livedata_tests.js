@@ -308,9 +308,9 @@ Tinytest.addAsync("mongo-livedata - models", function (test, onComplete) {
   var run = test.runId();
   var coll;
   if (Meteor.is_client) {
-    coll = new Meteor.Collection(null, null, null, Model); // local, unmanaged
+    coll = new Meteor.Collection(null, null, null, null, Model); // local, unmanaged
   } else {
-    coll = new Meteor.Collection("livedata_test_collection_"+run, null, null, Model);
+    coll = new Meteor.Collection("livedata_test_collection_"+run, null, null, null, Model);
   }
   
   var log = '';
