@@ -3,7 +3,7 @@ Package.describe({
 });
 
 Package.on_use(function(api) {
-  api.use('accounts', ['client', 'server']);
+  api.use('accounts-base', ['client', 'server']);
   api.use('srp', ['client', 'server']);
   api.use('email', ['server']);
 
@@ -14,7 +14,7 @@ Package.on_use(function(api) {
 });
 
 Package.on_test(function(api) {
-  api.use(['accounts-passwords', 'tinytest', 'test-helpers']);
+  api.use(['accounts-password', 'tinytest', 'test-helpers']);
   api.add_files('passwords_tests_setup.js', 'server');
   api.add_files('passwords_tests.js', ['client', 'server']);
   api.add_files('email_tests_setup.js', 'server');
