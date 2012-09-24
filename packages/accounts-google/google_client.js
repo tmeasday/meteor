@@ -1,7 +1,10 @@
 (function () {
-  Meteor.loginWithGoogle = function () {
-    if (!Meteor.accounts.google._clientId || !Meteor.accounts.google._appUrl)
-      throw new Meteor.accounts.ConfigError("Need to call Meteor.accounts.google.config first");
+  Meteor.loginWithGoogle = function (callback) {
+    var config = Meteor.accounts.configuration.findOne({service: 'google'});
+    if (!config) {
+      callback && callback(new Meteor.accounts.ConfigError("Service not configured"));
+      return;
+    }
 
     var state = Meteor.uuid();
 
@@ -20,12 +23,12 @@
     var loginUrl =
           'https://accounts.google.com/o/oauth2/auth' +
           '?response_type=code' +
-          '&client_id=' + Meteor.accounts.google._clientId +
+          '&client_id=' + config.clientId +
           '&scope=' + flat_scope +
-          '&redirect_uri=' + Meteor.accounts.google._appUrl + '/_oauth/google?close' +
+          '&redirect_uri=' + Meteor.absoluteUrl('_oauth/google?close') +
           '&state=' + state;
 
-    Meteor.accounts.oauth.initiateLogin(state, loginUrl);
+    Meteor.accounts.oauth.initiateLogin(state, loginUrl, callback);
   };
 
 }) ();

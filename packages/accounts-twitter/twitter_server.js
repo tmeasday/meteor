@@ -1,9 +1,5 @@
 (function () {
 
-  Meteor.accounts.twitter.setSecret = function (consumerSecret) {
-    Meteor.accounts.twitter._secret = consumerSecret;
-  };
-
   Meteor.accounts.oauth.registerService('twitter', 1, function(oauthBinding) {
     var identity = oauthBinding.get('https://api.twitter.com/1/account/verify_credentials.json');
 
@@ -19,7 +15,9 @@
         }
       },
       extra: {
-        name: identity.name
+        profile: {
+          name: identity.name
+        }
       }
     };
   });

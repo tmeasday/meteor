@@ -1,8 +1,9 @@
 #!/bin/bash
 
 set -e
+set -u
 
-BUNDLE_VERSION=0.2.2
+BUNDLE_VERSION=0.2.3
 UNAME=$(uname)
 ARCH=$(uname -m)
 
@@ -69,6 +70,12 @@ git checkout v0.8.8
 # http://piscisaureus.no.de/libuv/2012-06-29#00:40:38.256
 # Emacs bug this works around:
 # http://debbugs.gnu.org/cgi/bugreport.cgi?bug=2602
+#
+# NOTE: there is now an unreleased fix in libuv that fixes this issue:
+# https://github.com/joyent/node/issues/3994
+# Once this is released, we can remove this hack. This will fix the
+# mongo shell issue, though we may still need to do something like
+# "spawn('true', [], {stdio: 'inherit'})" to fix the emacs shell issue.
 patch -p1 <<EOF
 diff --git a/src/tty_wrap.cc b/src/tty_wrap.cc
 index fde8717..62cf939 100644
@@ -176,7 +183,6 @@ npm install mongodb@1.1.5
 npm install uglify-js@1.3.3
 npm install clean-css@0.6.0
 npm install progress@0.0.5
-npm install fibers@0.6.9
 npm install useragent@1.1.0
 npm install request@2.11.0
 npm install http-proxy@0.8.2
@@ -186,12 +192,27 @@ npm install keypress@0.1.0
  # pinned at older version. 0.1.16+ uses mimelib, not mimelib-noiconv
  # which make the dev bundle much bigger. We need a better solution.
 npm install mailcomposer@0.1.15
+# When adding new node modules (or any software) to the dev bundle, remember to
+# update LICENSE.txt!
 
 # Sockjs has a broken optional dependancy, and npm optional dependancies
 # don't seem to quite work. Fake it out with a checkout.
 git clone http://github.com/akdubya/rbytes.git
 npm install sockjs@0.3.1
 rm -rf rbytes
+
+npm install fibers@0.6.9
+# Fibers ships with compiled versions of its C code for a dozen platforms. This
+# bloats our dev bundle, and confuses dpkg-buildpackage and rpmbuild into
+# thinking that the packages need to depend on both 32- and 64-bit versions of
+# libstd++. Remove all the ones other than our architecture. (Expression based
+# on build.js in fibers source.)
+FIBERS_ARCH=$(node -p -e 'process.platform + "-" + process.arch + "-v8-" + /[0-9]+\.[0-9]+/.exec(process.versions.v8)[0]')
+cd fibers/bin
+mv $FIBERS_ARCH ..
+rm -rf *
+mv ../$FIBERS_ARCH .
+cd ../..
 
 
 cd "$DIR"

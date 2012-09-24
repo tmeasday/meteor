@@ -6,8 +6,8 @@ Meteor.methods({
   },
   exception: function (where, intended) {
     var shouldThrow =
-      (Meteor.is_server && where === "server") ||
-      (Meteor.is_client && where === "client") ||
+      (Meteor.isServer && where === "server") ||
+      (Meteor.isClient && where === "client") ||
       where === "both";
 
     if (shouldThrow) {
@@ -25,7 +25,7 @@ Meteor.methods({
 // Methods to help test applying methods with `wait: true`: delayedTrue
 // returns true 500ms after being run unless makeDelayedTrueImmediatelyReturnFalse
 // was run in the meanwhile
-if (Meteor.is_server) {
+if (Meteor.isServer) {
   var delayed_true_future;
   var delayed_true_times;
   Meteor.methods({
@@ -63,11 +63,11 @@ Ledger.allow({
 });
 
 Meteor.startup(function () {
-  if (Meteor.is_server)
+  if (Meteor.isServer)
     Ledger.remove({}); // XXX can this please be Ledger.remove()?
 });
 
-if (Meteor.is_server)
+if (Meteor.isServer)
   Meteor.publish('ledger', function (world) {
     return Ledger.find({world: world}, {key: {collection: 'ledger',
                                               world: world}});
@@ -78,7 +78,7 @@ Meteor.methods({
     var from = Ledger.findOne({name: from_name, world: world});
     var to = Ledger.findOne({name: to_name, world: world});
 
-    if (Meteor.is_server)
+    if (Meteor.isServer)
       cheat = false;
 
     if (!from)
@@ -104,7 +104,7 @@ Meteor.methods({
 
 objectsWithUsers = new Meteor.Collection("objectsWithUsers");
 
-if (Meteor.is_server) {
+if (Meteor.isServer) {
   objectsWithUsers.remove({});
   objectsWithUsers.insert({name: "owned by none", ownerUserIds: [null]});
   objectsWithUsers.insert({name: "owned by one - a", ownerUserIds: [1]});
@@ -140,7 +140,7 @@ if (Meteor.is_server) {
 
 /// Helper for "livedata - setUserId fails when called on server"
 
-if (Meteor.is_server) {
+if (Meteor.isServer) {
   Meteor.startup(function() {
     errorThrownWhenCallingSetUserIdDirectlyOnServer = null;
     try {

@@ -1,9 +1,5 @@
 (function () {
 
-  Meteor.accounts.facebook.setSecret = function (secret) {
-    Meteor.accounts.facebook._secret = secret;
-  };
-
   Meteor.accounts.oauth.registerService('facebook', 2, function(query) {
 
     var accessToken = getAccessToken(query);
@@ -11,21 +7,28 @@
 
     return {
       options: {
-        email: identity.email,
-        services: {facebook: {id: identity.id, accessToken: accessToken}}
+        services: {facebook: {
+          id: identity.id,
+          accessToken: accessToken,
+          email: identity.email
+        }}
       },
-      extra: {name: identity.name}
+      extra: {profile: {name: identity.name}}
     };
   });
 
   var getAccessToken = function (query) {
+    var config = Meteor.accounts.configuration.findOne({service: 'facebook'});
+    if (!config)
+      throw new Meteor.accounts.ConfigError("Service not configured");
+
     // Request an access token
     var result = Meteor.http.get(
       "https://graph.facebook.com/oauth/access_token", {
         params: {
-          client_id: Meteor.accounts.facebook._appId,
-          redirect_uri: Meteor.accounts.facebook._appUrl + "/_oauth/facebook?close",
-          client_secret: Meteor.accounts.facebook._secret,
+          client_id: config.appId,
+          redirect_uri: Meteor.absoluteUrl("_oauth/facebook?close"),
+          client_secret: config.secret,
           code: query.code
         }
       });

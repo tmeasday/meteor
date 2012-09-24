@@ -88,7 +88,7 @@
     if (!_.isEmpty(
       _.intersection(
         _.keys(extra),
-        ['services', 'private', 'username', 'email', 'emails'])))
+        ['services', 'username', 'email', 'emails'])))
       throw new Meteor.Error(400, "Disallowed fields in extra");
 
     if (Meteor.accounts._options.requireEmail &&
@@ -103,6 +103,10 @@
     return _.extend(user, extra);
   };
   Meteor.accounts.onCreateUserHook = function (options, extra, user) {
+    // add created at timestamp (and protect passed in user object from
+    // modification)
+    user = _.extend({createdAt: +(new Date)}, user);
+
     var fullUser;
 
     if (onCreateUserHook) {
@@ -118,9 +122,22 @@
     }
 
     _.each(validateNewUserHooks, function (hook) {
-      if (!hook(user))
+      if (!hook(fullUser))
         throw new Meteor.Error(403, "User validation failed");
     });
+
+    // check for existing user with duplicate email or username.
+    if (fullUser.username &&
+        Meteor.users.findOne({username: fullUser.username}))
+      throw new Meteor.Error(403, "Username already exists.");
+
+    if (fullUser.emails) {
+      var addresses = _.map(fullUser.emails, function (e) {
+        return e.address; });
+      if (Meteor.users.findOne({'emails.address': {$in: addresses}}))
+        throw new Meteor.Error(403, "Email already exists.");
+    }
+
 
     return fullUser;
   };
@@ -137,98 +154,53 @@
 
   // Updates or creates a user after we authenticate with a 3rd party
   //
-  // NOTE: We trust any OAuth provider to properly validates email address
-  //
   // @param options {Object}
-  //   - email (optional)
   //   - services {Object} e.g. {facebook: {id: (facebook user id), ...}}
   // @param extra {Object, optional} Any additional fields to place on the user objet
   // @returns {String} userId
   Meteor.accounts.updateOrCreateUser = function(options, extra) {
     extra = extra || {};
 
-    var updateUserData = function() {
+    if (_.keys(options.services).length !== 1)
+      throw new Error("Must pass exactly one service to updateOrCreateUser");
+    var serviceName = _.keys(options.services)[0];
+
+    // Look for a user with the appropriate service user id.
+    var selector = {};
+    selector["services." + serviceName + ".id"] =
+      options.services[serviceName].id;
+    var user = Meteor.users.findOne(selector);
+
+    if (user) {
       // don't overwrite existing fields
+      // XXX subobjects (aka 'profile', 'services')?
       var newKeys = _.without(_.keys(extra), _.keys(user));
       var newAttrs = _.pick(extra, newKeys);
-      Meteor.users.update(user, {$set: newAttrs});
-    };
+      Meteor.users.update(user._id, {$set: newAttrs});
 
-    if (_.keys(options.services).length > 0) {
-      if (_.keys(options.services).length > 1) {
-        throw new Error("Can't pass more than one service to updateOrCreateUser");
-      }
-      var serviceName = _.keys(options.services)[0];
-    }
-
-    var email = options.email;
-    var userByEmail = email && Meteor.users.findOne({"emails.email": email});
-    var user;
-    if (userByEmail) {
-
-      // If we know about this email address that is our user.
-      // Update the information from this service.
-      user = userByEmail;
-      if (options.services && (!user.services || !user.services[serviceName])) {
-        var attrs = {};
-        attrs["services." + serviceName] = options.services[serviceName];
-
-        // XXX we will probably also need a hook for updating users,
-        // similar to Meteor.accounts.onCreateUser
-        Meteor.users.update(user, {$set: attrs});
-      }
-
-      updateUserData();
       return user._id;
-    } else if (options.services) {
-
-      // If not, look for a user with the appropriate service user id.
-      // Update the user's email.
-      var selector = {};
-      selector["services." + serviceName + ".id"] = options.services[serviceName].id;
-      var userByServiceUserId = Meteor.users.findOne(selector);
-      if (userByServiceUserId) {
-        user = userByServiceUserId;
-        if (email) {
-          // The user must have changed the email address associated
-          // with this service (since if we only reach this else
-          // clause if we didn't match the user by email to begin
-          // with). Store the new one in addition to the old one.
-
-          // XXX we will probably also need a hook for updating users,
-          // similar to Meteor.accounts.onCreateUser
-          Meteor.users.update(
-            {_id: user._id},
-            {$push: {emails: {email: email, validated: true}}});
-        }
-
-        updateUserData();
-        return user._id;
-      } else {
-
-        // Create a new user
-        var attrs = {};
-        attrs[serviceName] = options.services[serviceName];
-        var user = {
-          emails: (email ? [{email: email, validated: true}] : []),
-          services: attrs
-        };
-        user = Meteor.accounts.onCreateUserHook(options, extra, user);
-        return Meteor.users.insert(user);
-      }
+    } else {
+      // Create a new user
+      var attrs = {};
+      attrs[serviceName] = options.services[serviceName];
+      user = {
+        services: attrs
+      };
+      user = Meteor.accounts.onCreateUserHook(options, extra, user);
+      return Meteor.users.insert(user);
     }
   };
 
 
   ///
-  /// PUBLISHING USER OBJECTS
+  /// PUBLISHING DATA
   ///
 
   // Always publish the current user's record to the client.
   Meteor.publish(null, function() {
     if (this.userId())
       return Meteor.users.find({_id: this.userId()},
-                               {fields: {services: 0, private: 0}});
+                               {fields: {profile: 1, username: 1, emails: 1}});
     else
       return null;
   }, {is_auto: true});
@@ -237,9 +209,58 @@
   Meteor.default_server.onAutopublish(function () {
     var handler = function () {
       return Meteor.users.find(
-        {}, {fields: {services: 0, private: 0, emails: 0}});
+        {}, {fields: {profile: 1, username: 1}});
     };
     Meteor.default_server.publish(null, handler, {is_auto: true});
   });
+
+  // Publish all login service configuration fields other than secret.
+  Meteor.publish("loginServiceConfiguration", function () {
+    return Meteor.accounts.configuration.find({}, {fields: {secret: 0}});
+  });
+
+  // Allow a one-time configuration for a login service.
+  Meteor.accounts.configuration.allow({}); // disallow mutators
+  Meteor.methods({
+    "configureLoginService": function(options) {
+      if (!Meteor.accounts.configuration.findOne({service: options.service}))
+        Meteor.accounts.configuration.insert(options);
+      else
+        throw new Meteor.Error(403, "Service " + options.service + " already configured");
+    }
+  });
+
+
+  ///
+  /// RESTRICTING WRITES TO USER OBJECTS
+  ///
+
+  Meteor.users.allow({
+    // clients can't insert or remove users
+    insert: function () { return false; },
+    remove: function () { return false; },
+    // clients can modify the profile field of their own document, and
+    // nothing else.
+    update: function (userId, docs, fields, modifier) {
+      // if there is more than one doc, at least one of them isn't our
+      // user record.
+      if (docs.length !== 1)
+        return false;
+      // make sure it is our record
+      var user = docs[0];
+      if (user._id !== userId)
+        return false;
+
+      // user can only modify the 'profile' field. sets to multiple
+      // sub-keys (eg profile.foo and profile.bar) are merged into entry
+      // in the fields list.
+      if (fields.length !== 1 || fields[0] !== 'profile')
+        return false;
+
+      return true;
+    },
+    fields: ['_id'] // we only look at _id.
+  });
+
 }) ();
 

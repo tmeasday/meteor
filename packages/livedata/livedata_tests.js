@@ -41,7 +41,7 @@ Tinytest.add("livedata - methods with colliding names", function (test) {
 testAsyncMulti("livedata - basic method invocation", [
   // Unknown methods
   function (test, expect) {
-    if (Meteor.is_server) {
+    if (Meteor.isServer) {
       // On server, with no callback, throws exception
       try {
         var ret = Meteor.call("unknown method");
@@ -53,7 +53,7 @@ testAsyncMulti("livedata - basic method invocation", [
       test.equal(ret, undefined);
     }
 
-    if (Meteor.is_client) {
+    if (Meteor.isClient) {
       // On client, with no callback, just returns undefined
       var ret = Meteor.call("unknown method");
       test.equal(ret, undefined);
@@ -69,36 +69,36 @@ testAsyncMulti("livedata - basic method invocation", [
     // make sure 'undefined' is preserved as such, instead of turning
     // into null (JSON does not have 'undefined' so there is special
     // code for this)
-    if (Meteor.is_server)
+    if (Meteor.isServer)
       test.equal(Meteor.call("nothing"), undefined);
-    if (Meteor.is_client)
+    if (Meteor.isClient)
       test.equal(Meteor.call("nothing"), undefined);
 
     test.equal(Meteor.call("nothing", expect(undefined, undefined)), undefined);
   },
 
   function (test, expect) {
-    if (Meteor.is_server)
+    if (Meteor.isServer)
       test.equal(Meteor.call("echo"), []);
-    if (Meteor.is_client)
+    if (Meteor.isClient)
       test.equal(Meteor.call("echo"), undefined);
 
     test.equal(Meteor.call("echo", expect(undefined, [])), undefined);
   },
 
   function (test, expect) {
-    if (Meteor.is_server)
+    if (Meteor.isServer)
       test.equal(Meteor.call("echo", 12), [12]);
-    if (Meteor.is_client)
+    if (Meteor.isClient)
       test.equal(Meteor.call("echo", 12), undefined);
 
     test.equal(Meteor.call("echo", 12, expect(undefined, [12])), undefined);
   },
 
   function (test, expect) {
-    if (Meteor.is_server)
+    if (Meteor.isServer)
       test.equal(Meteor.call("echo", 12, {x: 13}), [12, {x: 13}]);
-    if (Meteor.is_client)
+    if (Meteor.isClient)
       test.equal(Meteor.call("echo", 12, {x: 13}), undefined);
 
     test.equal(Meteor.call("echo", 12, {x: 13},
@@ -107,7 +107,7 @@ testAsyncMulti("livedata - basic method invocation", [
 
   // test that `wait: false` is respected
   function (test, expect) {
-    if (Meteor.is_client) {
+    if (Meteor.isClient) {
       Meteor.apply("delayedTrue", [], {wait: false}, expect(function(err, res) {
         test.equal(res, false);
       }));
@@ -117,7 +117,7 @@ testAsyncMulti("livedata - basic method invocation", [
 
   // test that `wait: true` is respected
   function(test, expect) {
-    if (Meteor.is_client) {
+    if (Meteor.isClient) {
       Meteor.apply("delayedTrue", [], {wait: true}, expect(function(err, res) {
         test.equal(res, true);
       }));
@@ -128,7 +128,7 @@ testAsyncMulti("livedata - basic method invocation", [
   function (test, expect) {
     // No callback
 
-    if (Meteor.is_server) {
+    if (Meteor.isServer) {
       test.throws(function () {
         Meteor.call("exception", "both");
       });
@@ -139,7 +139,7 @@ testAsyncMulti("livedata - basic method invocation", [
       test.equal(Meteor.call("exception", "client"), undefined);
     }
 
-    if (Meteor.is_client) {
+    if (Meteor.isClient) {
       // The client exception is thrown away because it's in the
       // stub. The server exception is throw away because we didn't
       // give a callback.
@@ -150,7 +150,7 @@ testAsyncMulti("livedata - basic method invocation", [
 
     // With callback
 
-    if (Meteor.is_client) {
+    if (Meteor.isClient) {
       test.equal(
         Meteor.call("exception", "both",
                     expect(failure(test, 500, "Internal server error"))),
@@ -162,7 +162,7 @@ testAsyncMulti("livedata - basic method invocation", [
       test.equal(Meteor.call("exception", "client"), undefined);
     }
 
-    if (Meteor.is_server) {
+    if (Meteor.isServer) {
       test.equal(
         Meteor.call("exception", "both",
                     expect(failure(test, "Test method throwing an exception"))),
@@ -176,7 +176,7 @@ testAsyncMulti("livedata - basic method invocation", [
   },
 
   function (test, expect) {
-    if (Meteor.is_server) {
+    if (Meteor.isServer) {
       var threw = false;
       try {
         Meteor.call("exception", "both", true);
@@ -188,7 +188,7 @@ testAsyncMulti("livedata - basic method invocation", [
       test.isTrue(threw);
     }
 
-    if (Meteor.is_client) {
+    if (Meteor.isClient) {
       test.equal(
         Meteor.call("exception", "both", true,
                     expect(failure(test, 999,
@@ -214,7 +214,7 @@ var checkBalances = function (test, a, b) {
 };
 
 var onQuiesce = function (f) {
-  if (Meteor.is_server)
+  if (Meteor.isServer)
     f();
   else
     Meteor.default_connection.onQuiesce(f);
@@ -224,7 +224,7 @@ var onQuiesce = function (f) {
 // this is a big hack (and XXX pollutes the global test namespace)
 testAsyncMulti("livedata - compound methods", [
   function (test) {
-    if (Meteor.is_client)
+    if (Meteor.isClient)
       Meteor.subscribe("ledger", test.runId());
 
     Ledger.insert({name: "alice", balance: 100, world: test.runId()});
@@ -239,14 +239,14 @@ testAsyncMulti("livedata - compound methods", [
     var release = expect();
     onQuiesce(function () {
       checkBalances(test, 90, 60);
-      Tinytest.defer(release); // XXX (why) do we need Tinytest.defer?
+      Meteor.defer(release);
     });
   },
   function (test, expect) {
     Meteor.call('ledger/transfer', test.runId(), "alice", "bob", 100, true,
                 expect(failure(test, 409)));
 
-    if (Meteor.is_client)
+    if (Meteor.isClient)
       // client can fool itself by cheating, but only until the sync
       // finishes
       checkBalances(test, -10, 160);
@@ -256,7 +256,7 @@ testAsyncMulti("livedata - compound methods", [
     var release = expect();
     onQuiesce(function () {
       checkBalances(test, 90, 60);
-      Tinytest.defer(release);
+      Meteor.defer(release);
     });
   }
 ]);
@@ -292,7 +292,7 @@ var eavesdropOnCollection = function(livedata_connection,
 
 testAsyncMulti("livedata - changing userid reruns subscriptions without flapping data on the wire", [
   function(test, expect) {
-    if (Meteor.is_client) {
+    if (Meteor.isClient) {
       var messages = [];
       var undoEavesdrop = eavesdropOnCollection(
         Meteor.default_connection, "objectsWithUsers", messages);
@@ -364,7 +364,7 @@ testAsyncMulti("livedata - changing userid reruns subscriptions without flapping
       });
     }
   }, function(test, expect) {
-    if (Meteor.is_client) {
+    if (Meteor.isClient) {
       Meteor.subscribe("recordUserIdOnStop");
       Meteor.apply("setUserId", [100], {wait: true}, expect(function() {}));
       Meteor.apply("setUserId", [101], {wait: true}, expect(function() {}));
@@ -376,7 +376,7 @@ testAsyncMulti("livedata - changing userid reruns subscriptions without flapping
 ]);
 
 Tinytest.add("livedata - setUserId fails when called from server", function(test) {
-  if (Meteor.is_server) {
+  if (Meteor.isServer) {
     test.equal(errorThrownWhenCallingSetUserIdDirectlyOnServer.message,
                "Can't call setUserId on a server initiated method call");
   }

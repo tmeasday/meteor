@@ -11,20 +11,27 @@
 
     return {
       options: {
-        email: identity.email,
-        services: {google: {id: identity.id, accessToken: accessToken}}
+        services: {google: {
+          id: identity.id,
+          accessToken: accessToken,
+          email: identity.email
+        }}
       },
-      extra: {name: identity.name}
+      extra: {profile: {name: identity.name}}
     };
   });
 
   var getAccessToken = function (query) {
+    var config = Meteor.accounts.configuration.findOne({service: 'google'});
+    if (!config)
+      throw new Meteor.accounts.ConfigError("Service not configured");
+
     var result = Meteor.http.post(
       "https://accounts.google.com/o/oauth2/token", {params: {
         code: query.code,
-        client_id: Meteor.accounts.google._clientId,
-        client_secret: Meteor.accounts.google._secret,
-        redirect_uri: Meteor.accounts.google._appUrl + "/_oauth/google?close",
+        client_id: config.clientId,
+        client_secret: config.secret,
+        redirect_uri: Meteor.absoluteUrl("_oauth/google?close"),
         grant_type: 'authorization_code'
       }});
 

@@ -11,6 +11,10 @@
   var RESET_PASSWORD_TOKEN_KEY = 'Meteor.loginButtons.resetPasswordToken';
   var ENROLL_ACCOUNT_TOKEN_KEY = 'Meteor.loginButtons.enrollAccountToken';
   var JUST_VALIDATED_USER_KEY = 'Meteor.loginButtons.justValidatedUser';
+  var CONFIGURE_LOGIN_SERVICES_DIALOG_VISIBLE = 'Meteor.loginButtons.configureLoginServicesDialogVisible';
+  var CONFIGURE_LOGIN_SERVICES_DIALOG_SERVICE_NAME = "Meteor.loginButtons.configureLoginServicesDialogServiceName";
+  var CONFIGURE_LOGIN_SERVICES_DIALOG_SAVE_ENABLED = "Meteor.accounts.facebook.saveEnabled";
+
 
   var resetSession = function () {
     Session.set(IN_SIGNUP_FLOW_KEY, false);
@@ -29,57 +33,63 @@
   // loginButtons template
   //
 
+  configureService = function(name) {
+    Session.set(CONFIGURE_LOGIN_SERVICES_DIALOG_VISIBLE, true);
+    Session.set(CONFIGURE_LOGIN_SERVICES_DIALOG_SERVICE_NAME, name);
+    Session.set(CONFIGURE_LOGIN_SERVICES_DIALOG_SAVE_ENABLED, false);
+  };
+
   Template.loginButtons.events = {
     'click #login-buttons-Facebook': function () {
-      try {
-        Meteor.loginWithFacebook();
-      } catch (e) {
-        if (e instanceof Meteor.accounts.ConfigError)
-          alert("Facebook API key not set. Configure app details with "
-                + "Meteor.accounts.facebook.config() "
-                + "and Meteor.accounts.facebook.setSecret()");
-        else
-          throw e;
-      }
+      resetMessages();
+      Meteor.loginWithFacebook(function (e) {
+        if (!e || e instanceof Meteor.accounts.LoginCancelledError) {
+          // do nothing
+        } else if (e instanceof Meteor.accounts.ConfigError) {
+          configureService("Facebook"); // XXX refactor "Facebook" -> "facebook"
+        } else {
+          Session.set(ERROR_MESSAGE_KEY, e.reason || "Unknown error");
+        }
+      });
     },
 
     'click #login-buttons-Google': function () {
-      try {
-        Meteor.loginWithGoogle();
-      } catch (e) {
-        if (e instanceof Meteor.accounts.ConfigError)
-          alert("Google API key not set. Configure app details with "
-                + "Meteor.accounts.google.config() and "
-                + "Meteor.accounts.google.setSecret()");
-        else
-          throw e;
-      };
+      resetMessages();
+      Meteor.loginWithGoogle(function (e) {
+        if (!e || e instanceof Meteor.accounts.LoginCancelledError) {
+          // do nothing
+        } else if (e instanceof Meteor.accounts.ConfigError) {
+          configureService("Google");
+        } else {
+          Session.set(ERROR_MESSAGE_KEY, e.reason || "Unknown error");
+        }
+      });
     },
 
     'click #login-buttons-Weibo': function () {
-      try {
-        Meteor.loginWithWeibo();
-      } catch (e) {
-        if (e instanceof Meteor.accounts.ConfigError)
-          alert("Weibo API key not set. Configure app details with "
-                + "Meteor.accounts.weibo.config() and "
-                + "Meteor.accounts.weibo.setSecret()");
-        else
-          throw e;
-      };
+      resetMessages();
+      Meteor.loginWithWeibo(function (e) {
+        if (!e || e instanceof Meteor.accounts.LoginCancelledError) {
+          // do nothing
+        } else if (e instanceof Meteor.accounts.ConfigError) {
+          configureService("Weibo");
+        } else {
+          Session.set(ERROR_MESSAGE_KEY, e.reason || "Unknown error");
+        }
+      });
     },
 
     'click #login-buttons-Twitter': function () {
-      try {
-        Meteor.loginWithTwitter();
-      } catch (e) {
-        if (e instanceof Meteor.accounts.ConfigError)
-          alert("Twitter API key not set. Configure app details with "
-                + "Meteor.accounts.twitter.config() and "
-                + "Meteor.accounts.twitter.setSecret()");
-        else
-          throw e;
-      };
+      resetMessages();
+      Meteor.loginWithTwitter(function (e) {
+        if (!e || e instanceof Meteor.accounts.LoginCancelledError) {
+          // do nothing
+        } else if (e instanceof Meteor.accounts.ConfigError) {
+          configureService("Twitter");
+        } else {
+          Session.set(ERROR_MESSAGE_KEY, e.reason || "Unknown error");
+        }
+      });
     },
 
     'click #login-buttons-logout': function() {
@@ -97,11 +107,15 @@
       return service.name === 'Password';
     });
 
-    return hasPasswordService || services.length > 2;
+    return hasPasswordService || services.length > 1;
   };
 
   Template.loginButtons.services = function () {
     return getLoginServices();
+  };
+
+  Template.loginButtons.configurationLoaded = function () {
+    return Meteor.accounts.loginServicesConfigured();
   };
 
   Template.loginButtons.displayName = function () {
@@ -109,12 +123,12 @@
     if (!user)
       return '';
 
-    if (user.name)
-      return user.name;
+    if (user.profile && user.profile.name)
+      return user.profile.name;
     if (user.username)
       return user.username;
-    if (user.emails && user.emails[0] && user.emails[0] && user.emails[0].email)
-      return user.emails[0].email;
+    if (user.emails && user.emails[0] && user.emails[0].address)
+      return user.emails[0].address;
 
     return '';
   };
@@ -175,7 +189,7 @@
           document.getElementById('forgot-password-email').value = usernameOrEmail;
 
     },
-    'keypress #login-username,#login-email,#login-username-or-email,#login-password,#login-password-again': function (event) {
+    'keypress #login-username, keypress #login-email, keypress #login-username-or-email, keypress #login-password, keypress #login-password-again': function (event) {
       if (event.keyCode === 13)
         loginOrSignup();
     }
@@ -260,6 +274,10 @@
       || !Meteor.accounts._options.requireUsername;
   };
 
+  Template.loginButtonsServicesRow.configured = function () {
+    return !!Meteor.accounts.configuration.findOne({service: this.name.toLowerCase()});
+  };
+
 
   //
   // loginButtonsMessage template
@@ -329,7 +347,7 @@
     },
     'click .login-close-text': function () {
       resetSession();
-    }
+   }
   };
 
   Template.loginButtonsServicesDropdown.dropdownVisible = function () {
@@ -455,6 +473,93 @@
       });
     }
   });
+
+  //
+  // configureLoginServicesDialog template
+  //
+
+  Template.configureLoginServicesDialog.events({
+    'click #configure-login-services-dismiss-button': function () {
+      Session.set(CONFIGURE_LOGIN_SERVICES_DIALOG_VISIBLE, false);
+    },
+    'click #configure-login-services-dialog-save-configuration': function () {
+      if (Session.get(CONFIGURE_LOGIN_SERVICES_DIALOG_SAVE_ENABLED)) {
+        // Prepare the configuration document for this login service
+        var serviceName = Session.get(CONFIGURE_LOGIN_SERVICES_DIALOG_SERVICE_NAME).toLowerCase();
+        var configuration = {
+          service: serviceName
+        };
+        _.each(configurationFields(), function(field) {
+          configuration[field.property] = document.getElementById(
+            'configure-login-services-dialog-' + field.property).value;
+        });
+
+        // Configure this login service
+        Meteor.call("configureLoginService", configuration, function (error, result) {
+          if (error)
+            Meteor._debug("Error configurating login service " + serviceName, error);
+          else
+            Session.set(CONFIGURE_LOGIN_SERVICES_DIALOG_VISIBLE, false);
+        });
+      }
+    }
+  });
+
+  Template.configureLoginServicesDialog.events({
+    'input': function (event) {
+      // if the event fired on one of the configuration input fields,
+      // check whether we should enable the 'save configuration' button
+      if (event.target.id.indexOf('configure-login-services-dialog') === 0)
+        updateSaveDisabled();
+    }
+  });
+
+  // check whether the 'save configuration' button should be enabled.
+  // this is a really strange way to implement this and a Forms
+  // Abstraction would make all of this reactive, and simpler.
+  var updateSaveDisabled = function () {
+    var saveEnabled = true;
+    _.any(configurationFields(), function(field) {
+      if (document.getElementById(
+        'configure-login-services-dialog-' + field.property).value === '') {
+        saveEnabled = false;
+        return true;
+      } else {
+        return false;
+      }
+    });
+
+    Session.set(CONFIGURE_LOGIN_SERVICES_DIALOG_SAVE_ENABLED, saveEnabled);
+  };
+
+  // Returns the appropriate template for this login service.  This
+  // template should be defined in the service's package
+  var configureLoginServicesDialogTemplateForService = function () {
+    var serviceName = Session.get(CONFIGURE_LOGIN_SERVICES_DIALOG_SERVICE_NAME);
+    return Template['configureLoginServicesDialogFor' + serviceName];
+  };
+
+  var configurationFields = function () {
+    var template = configureLoginServicesDialogTemplateForService();
+    return template.fields();
+  };
+
+  Template.configureLoginServicesDialog.configurationFields = function () {
+    return configurationFields();
+  };
+
+  Template.configureLoginServicesDialog.visible = function () {
+    return Session.get(CONFIGURE_LOGIN_SERVICES_DIALOG_VISIBLE);
+  };
+
+  Template.configureLoginServicesDialog.configurationSteps = function () {
+    // renders the appropriate template
+    return configureLoginServicesDialogTemplateForService()();
+  };
+
+  Template.configureLoginServicesDialog.saveDisabled = function () {
+    return !Session.get(CONFIGURE_LOGIN_SERVICES_DIALOG_SAVE_ENABLED);
+  };
 
   //
   // helpers

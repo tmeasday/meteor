@@ -1,7 +1,10 @@
 (function () {
-  Meteor.loginWithTwitter = function () {
-    if (!Meteor.accounts.twitter._appUrl)
-      throw new Meteor.accounts.ConfigError("Need to call Meteor.accounts.twitter.config first");
+  Meteor.loginWithTwitter = function (callback) {
+    var config = Meteor.accounts.configuration.findOne({service: 'twitter'});
+    if (!config) {
+      callback && callback(new Meteor.accounts.ConfigError("Service not configured"));
+      return;
+    }
 
     var state = Meteor.uuid();
     // We need to keep state across the next two 'steps' so we're adding
@@ -10,7 +13,7 @@
 
     // url back to app, enters "step 2" as described in
     // packages/accounts-oauth1-helper/oauth1_server.js
-    var callbackUrl = Meteor.accounts.twitter._appUrl + '/_oauth/twitter?close&state=' + state;
+    var callbackUrl = Meteor.absoluteUrl('_oauth/twitter?close&state=' + state);
 
     // url to app, enters "step 1" as described in
     // packages/accounts-oauth1-helper/oauth1_server.js
@@ -18,7 +21,7 @@
           + encodeURIComponent(callbackUrl)
           + '&state=' + state;
 
-    Meteor.accounts.oauth.initiateLogin(state, url);
+    Meteor.accounts.oauth.initiateLogin(state, url, callback);
   };
 
 })();
