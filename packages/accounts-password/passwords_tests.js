@@ -165,7 +165,28 @@ if (Meteor.isClient) (function () {
         test.equal(Meteor.user().profile.touchedByOnCreateUser, true);
       }));
     },
-    logoutStep
+
+    // test Meteor.user(). This test properly belongs in
+    // accounts-base/accounts_tests.js, but this is where the tests that
+    // actually log in are.
+    function(test, expect) {
+      var clientUser = Meteor.user();
+      Meteor.call('testMeteorUser', expect(function (err, result) {
+        test.equal(result._id, clientUser._id);
+        test.equal(result.profile.touchedByOnCreateUser, true);
+        test.equal(err, undefined);
+      }));
+    },
+    logoutStep,
+    function(test, expect) {
+      var clientUser = Meteor.user();
+      test.equal(clientUser, null);
+      Meteor.call('testMeteorUser', expect(function (err, result) {
+        test.equal(err, undefined);
+        test.equal(result, null);
+      }));
+    }
+
   ]);
 
 }) ();
@@ -204,6 +225,44 @@ if (Meteor.isServer) (function () {
     });
 
 
+  Tinytest.add(
+    'passwords - setPassword',
+    function (test) {
+      var username = Meteor.uuid();
+
+      var userId = Meteor.createUser({username: username}, {});
+
+      var user = Meteor.users.findOne(userId);
+      // no services yet.
+      test.equal(user.services.password, undefined);
+
+      // set a new password.
+      Meteor.setPassword(userId, 'new password');
+      user = Meteor.users.findOne(userId);
+      var oldVerifier = user.services.password.srp;
+      test.isTrue(user.services.password.srp);
+
+      // reset with the same password, see we get a different verifier
+      Meteor.setPassword(userId, 'new password');
+      user = Meteor.users.findOne(userId);
+      var newVerifier = user.services.password.srp;
+      test.notEqual(oldVerifier.salt, newVerifier.salt);
+      test.notEqual(oldVerifier.identity, newVerifier.identity);
+      test.notEqual(oldVerifier.verifier, newVerifier.verifier);
+
+      // cleanup
+      Meteor.users.remove(userId);
+    });
+
+
+  // This test properly belongs in accounts-base/accounts_tests.js, but
+  // this is where the tests that actually log in are.
+  Tinytest.add('accounts - user() out of context', function (test) {
+    // basic server context, no method.
+    test.throws(function () {
+      Meteor.user();
+    });
+  });
 
   // XXX would be nice to test Meteor.accounts.config({forbidSignups: true})
 }) ();

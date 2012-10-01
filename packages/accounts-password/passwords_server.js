@@ -138,34 +138,16 @@
 
       var user = Meteor.users.findOne({"services.password.reset.token": token});
       if (!user)
-        throw new Meteor.Error(403, "Reset password link expired");
+        throw new Meteor.Error(403, "Token expired");
 
       Meteor.users.update({_id: user._id}, {
         $set: {'services.password.srp': newVerifier},
         $unset: {'services.password.reset': 1}
       });
-
-      var loginToken = Meteor.accounts._loginTokens.insert({userId: user._id});
-      this.setUserId(user._id);
-      return {token: loginToken, id: user._id};
-    },
-
-    enrollAccount: function (token, newVerifier) {
-      if (!token)
-        throw new Meteor.Error(400, "Need to pass token");
-      if (!newVerifier)
-        throw new Meteor.Error(400, "Need to pass newVerifier");
-
-      var user = Meteor.users.findOne({"services.password.enroll.token": token});
-      if (!user)
-        throw new Meteor.Error(403, "Enroll account link expired");
-
-      Meteor.users.update({_id: user._id}, {
-        $set: {'services.password.srp': newVerifier},
-        $unset: {'services.password.enroll': 1}
-      });
+      // verify their email. they got the password reset email.
       Meteor.users.update({_id: user._id},
                           {$set: {"emails.0.validated": true}});
+
 
       var loginToken = Meteor.accounts._loginTokens.insert({userId: user._id});
       this.setUserId(user._id);
@@ -229,7 +211,7 @@
     var token = Meteor.uuid();
     var when = +(new Date);
     Meteor.users.update(userId, {$set: {
-      "services.password.enroll": {
+      "services.password.reset": {
         token: token,
         when: when
       }
@@ -304,6 +286,15 @@
   });
 
 
+  Meteor.setPassword = function (userId, newPassword) {
+    var user = Meteor.users.findOne(userId);
+    if (!user)
+      throw new Meteor.Error(403, "User not found");
+    var newVerifier = Meteor._srp.generateVerifier(newPassword);
+
+    Meteor.users.update({_id: user._id}, {
+      $set: {'services.password.srp': newVerifier}});
+  };
 
 
   ////////////
@@ -388,20 +379,27 @@
       extra = {};
     }
 
-    // XXX relax these constraints!
-
+    // XXX allow an optional callback?
     if (callback) {
       throw new Error("Meteor.createUser with callback not supported on the server yet.");
     }
 
-    if (options.password || options.srp)
-      throw new Error("Meteor.createUser on the server does not let you set a password yet.");
-
-    if (!options.email)
-      throw new Error("Meteor.createUser on the server requires email.");
-
     var userId = createUser(options, extra);
-    Meteor.accounts.sendEnrollmentEmail(userId, options.email);
+
+    // send email if the user has an email and no password
+    var user = Meteor.users.findOne(userId);
+    if (
+        // user has email address
+      (user && user.emails && user.emails.length &&
+       user.emails[0].address) &&
+        // and does not have a password
+      !(user.services && user.services.password &&
+        user.services.password.srp)) {
+
+      var email = user.emails[0].address;
+      Meteor.accounts.sendEnrollmentEmail(userId, email);
+    }
+
     return userId;
   };
 
