@@ -456,10 +456,7 @@ Meteor.Collection.prototype._validatedUpdate = function(
   if (docs[0] && '_meteorRawData' in docs[0])
     docs = _.invoke(docs, '_meteorRawData');
 
-  // Construct new $in selector to augment the original one. This means we'll
-  // never update any doc we didn't validate. We keep around the original
-  // selector so that we don't mutate any docs that have been updated to no
-  // longer match the original selector.
+  // construct new $in selector to replace the original one
   var idInClause = {};
   idInClause.$in = _.map(docs, function(doc) {
     return doc._id;
@@ -468,7 +465,7 @@ Meteor.Collection.prototype._validatedUpdate = function(
 
   self._collection.update.call(
     self._collection,
-    {$and: [selector, idSelector]},
+    idSelector,
     mutator,
     options);
 };
