@@ -709,7 +709,8 @@ _.extend(Target.prototype, {
 
     allJs = minifiers.UglifyJSMinify(allJs, {
       fromString: true,
-      compress: {drop_debugger: false}
+      compress: {drop_debugger: false},
+      mangle: {except: ["$super"]}
     }).code;
 
     self.js = [new File({ data: new Buffer(allJs, 'utf8') })];
